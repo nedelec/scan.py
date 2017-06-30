@@ -2,22 +2,22 @@
 #
 # scan.py
 #
-# copyright F. Nedelec, December 14th 2007
+# copyright  F. Nedelec and S. Dmitrieff 2007--2017
 
 """
-    Execute command sequentially in given directories
+    Execute specified command in given directories, sequentially using a given number of processes
  
 Syntax:
 
-    scan.py command directory1 [directory2] [directory3] [...]
+    scan.py command directory1 [directory2] [directory3] [...] [jobs=N]
     
 Example:
     
-    scan.py 'report solid output=solid.txt' run*
+    scan.py 'play image' run* jobs=2
     
-F. Nedelec, 02.2011, 09.2012, 03.2013, 01.2014
+F. Nedelec, 02.2011, 09.2012, 03.2013, 01.2014, 06.2017
+S. Dmitreff, 06.2017
 """
-
 
 try:
     import sys, os, subprocess
@@ -25,57 +25,87 @@ except ImportError:
     sys.stderr.write("Error: could not load necessary python modules\n")
     sys.exit()
 
-
-executable = ["echo"]
+executable = ["pwd"]
 out = sys.stderr
+njobs = 1
 
 #------------------------------------------------------------------------
 
-def process(path):
-    """run executable in specified directory"""
+def execute(path):
+    """
+    run executable in specified directory
+    """
     os.chdir(path)
+    out.write('- '*32+path+"\n")
     try:
         subprocess.call(executable, shell=True)
     except Exception as e:
         sys.stderr.write("Error: %s\n" % repr(e));
 
 
-#------------------------------------------------------------------------
+def execute_queue(paths, queue):
+    """
+    run executable sequentially in directories specified in paths
+    """
+    while True:
+        try:
+            path = queue.get(False, 1)
+            execute(path)
+        except:
+            break;
+
 
 def main(args):
     """
-        Execute command
+        read command line arguments and process command
     """
     global executable
     try:
         executable = args[0]
     except:
         out.write("Error: you should specify a command to execute\n")
-        sys.exit()
+        return 1
 
+    njobs = 1
     paths = []
     for arg in args[1:]:
         if os.path.isdir(arg):
-            paths.append(arg)
+            paths.append(os.path.abspath(arg))
+        elif arg.startswith('nproc='):
+            njobs = int(arg[6:])
+        elif arg.startswith('jobs='):
+            njobs = int(arg[5:])
         else:
             out.write("  Warning: skipped argument `%s'\n" % arg)
             #sys.exit()
 
     if not paths:
         out.write("Error: you should specify at least one directory\n")
-        sys.exit()
-
-    cdir = os.getcwd()
-
-    for p in paths:
-        os.chdir(cdir)
+        return 2
+    
+    if njobs > len(paths):
+        njobs = len(paths)
+    
+    #process in parallel with child threads:
+    if njobs > 1:
         try:
-            out.write('- '*32+p+"\n")
-            process(p)
-        except Exception as e:
-            out.write("Error : %s\n" % repr(e));
+            from multiprocessing import Process, Queue
+            queue = Queue()
+            for p in paths:
+                queue.put(p)
+            jobs = [Process(target=execute_queue, args=(paths,queue)) for n in range(njobs)]
+            for job in jobs:
+                job.start()
+            for job in jobs:
+                job.join()
+            return;
+        except ImportError:
+            out.write("Warning: multiprocessing unavailable\n")
+    #process sequentially:
+    for p in paths:
+        execute(p)
 
-
+#------------------------------------------------------------------------
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1]=='help':
