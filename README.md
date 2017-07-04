@@ -1,6 +1,6 @@
 # scan.py
 
-`scan.py' is a pythong script to execute a command in specified directories
+`scan.py' is a python script to execute a command in specified directories
 
 """
     Execute specified command in given directories, sequentially using a given number of processes
