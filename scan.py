@@ -49,7 +49,7 @@ def execute_queue(paths, queue):
     """
     while True:
         try:
-            path = queue.get(False, 1)
+            path = queue.get(True, 1)
             execute(path)
         except:
             break;
