@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 #
-# scan.py
+# scan.py executes a given command in many directories
 #
-# copyright  F. Nedelec and S. Dmitrieff 2007--2017
+# Copyright  F. Nedelec and S. Dmitrieff 2007--2018
 
 """
     Execute specified command in given directories, sequentially using a given number of processes
@@ -25,7 +25,7 @@ except ImportError:
     sys.stderr.write("Error: could not load necessary python modules\n")
     sys.exit()
 
-executable = ["pwd"]
+executable = 'pwd'
 out = sys.stderr
 njobs = 1
 
@@ -36,21 +36,21 @@ def execute(path):
     run executable in specified directory
     """
     os.chdir(path)
-    out.write('- '*32+path+"\n")
+    out.write('-  '*24+path+"\n")
     try:
         subprocess.call(executable, shell=True)
     except Exception as e:
         sys.stderr.write("Error: %s\n" % repr(e));
 
 
-def execute_queue(paths, queue):
+def execute_queue(queue):
     """
     run executable sequentially in directories specified in paths
     """
     while True:
         try:
-            path = queue.get(False, 1)
-            execute(path)
+            arg = queue.get(True, 1)
+            execute(arg)
         except:
             break;
 
@@ -71,13 +71,13 @@ def main(args):
     for arg in args[1:]:
         if os.path.isdir(arg):
             paths.append(os.path.abspath(arg))
-        elif arg.startswith('nproc='):
+        elif arg.startswith('nproc=') or arg.startswith('njobs='):
             njobs = int(arg[6:])
         elif arg.startswith('jobs='):
             njobs = int(arg[5:])
         else:
-            out.write("  Warning: skipped argument `%s'\n" % arg)
-            #sys.exit()
+            out.write("  Warning: unexpected argument `%s'\n" % arg)
+            sys.exit()
 
     if not paths:
         out.write("Error: you should specify at least one directory\n")
@@ -93,25 +93,23 @@ def main(args):
             queue = Queue()
             for p in paths:
                 queue.put(p)
-            jobs = [Process(target=execute_queue, args=(paths,queue)) for n in range(njobs)]
+            jobs = [Process(target=execute_queue, args=(queue,)) for n in range(njobs)]
             for job in jobs:
                 job.start()
             for job in jobs:
                 job.join()
-            return;
+            return 0
         except ImportError:
             out.write("Warning: multiprocessing unavailable\n")
     #process sequentially:
     for p in paths:
         execute(p)
+    return 0
 
 #------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2 or sys.argv[1]=='help':
+    if len(sys.argv) < 2 or sys.argv[1].endswith("help"):
         print(__doc__)
     else:
         main(sys.argv[1:])
-
-
-
